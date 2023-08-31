@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<launch>
+  <node pkg="ground_sam" type="segmentation.py" name="segmentation" output="screen">
+    <remap from="~image" to="/soar/head_camera/rgb/image_rect"/>
+  </node>
+</launch>

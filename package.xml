@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<package format="2">
+  <name>ground_sam</name>
+  <version>0.1.0</version>
+  <description>The ground_sam package</description>
+  <maintainer email="SBGRP-git@g.softbank.co.jp">SoftBank corp.</maintainer>
+  <license>Apache 2.0</license>
+  <buildtool_depend>catkin</buildtool_depend>
+  <depend>sensor_msgs</depend>
+  <depend>cv_bridge</depend>
+  <depend>rospy</depend>
+  <export/>
+</package>

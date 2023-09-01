@@ -6,7 +6,12 @@ find_package(
   COMPONENTS sensor_msgs
              cv_bridge
              rospy
+             message_generation
 )
+
+add_service_files(FILES Segmentation.srv)
+
+generate_messages(DEPENDENCIES sensor_msgs)
 
 catkin_package(
   #  INCLUDE_DIRS include
@@ -15,6 +20,7 @@ catkin_package(
     sensor_msgs
     cv_bridge
     rospy
+    message_runtime
   #  DEPENDS system_lib
 )
 

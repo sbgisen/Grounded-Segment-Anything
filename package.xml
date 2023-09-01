@@ -6,6 +6,8 @@
   <maintainer email="SBGRP-git@g.softbank.co.jp">SoftBank corp.</maintainer>
   <license>Apache 2.0</license>
   <buildtool_depend>catkin</buildtool_depend>
+  <build_depend>message_generation</build_depend>
+  <exec_depend>message_runtime</exec_depend>
   <depend>sensor_msgs</depend>
   <depend>cv_bridge</depend>
   <depend>rospy</depend>

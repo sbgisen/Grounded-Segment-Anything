@@ -24,6 +24,9 @@ import rospy
 import supervision as sv
 import torch
 import torchvision
+from ground_sam.srv import Segmentation as SegmentationSrv
+from ground_sam.srv import SegmentationRequest
+from ground_sam.srv import SegmentationResponse
 from groundingdino.util.inference import Model
 from LightHQSAM.setup_light_hqsam import setup_model
 from segment_anything import SamPredictor
@@ -64,7 +67,42 @@ class Segmentation(object):
 
         rospy.Subscriber('classes', String, self.__classes_callback)
         rospy.Subscriber('~image', Image, self.__callback)
+        rospy.Service('~segmentation', SegmentationSrv, self.__srv_callback)
         self.__vis_pub = rospy.Publisher('~vis', Image, queue_size=1)
+
+    def __srv_callback(self, req: SegmentationRequest) -> SegmentationResponse:
+        self.__classes = req.classes
+        img = self.__bridge.imgmsg_to_cv2(req.image, desired_encoding='bgr8')
+        detections = self.__grounding_dino_model.predict_with_classes(image=img,
+                                                                      classes=self.__classes,
+                                                                      box_threshold=self.__box_threshold,
+                                                                      text_threshold=self.__text_threshold)
+        box_annotator = sv.BoxAnnotator()
+
+        labels = [f'{self.__classes[class_id]} {confidence:0.2f}' for _, _, confidence, class_id, _ in detections]
+        box_annotator.annotate(scene=img.copy(), detections=detections, labels=labels)
+        rospy.loginfo(f'Before NMS: {len(detections.xyxy)} boxes')
+
+        nms_idx = torchvision.ops.nms(torch.from_numpy(detections.xyxy), torch.from_numpy(detections.confidence),
+                                      self.__nms_threshold).numpy().tolist()
+
+        detections.xyxy = detections.xyxy[nms_idx]
+        detections.confidence = detections.confidence[nms_idx]
+        detections.class_id = detections.class_id[nms_idx]
+
+        rospy.loginfo(f'After NMS: {len(detections.xyxy)} boxes')
+
+        # convert detections to masks
+        detections.mask = self.__segment(image=cv2.cvtColor(img, cv2.COLOR_BGR2RGB), xyxy=detections.xyxy)
+
+        # annotate image with detections
+        box_annotator = sv.BoxAnnotator()
+        mask_annotator = sv.MaskAnnotator()
+        labels = [f'{self.__classes[class_id]} {confidence:0.2f}' for _, _, confidence, class_id, _ in detections]
+        annotated_image = mask_annotator.annotate(scene=img.copy(), detections=detections)
+        annotated_image = box_annotator.annotate(scene=annotated_image, detections=detections, labels=labels)
+
+        return SegmentationResponse(self.__bridge.cv2_to_imgmsg(annotated_image, encoding='bgr8'))
 
     def __classes_callback(self, msg: String) -> None:
         self.__classes = msg.data.split(',')

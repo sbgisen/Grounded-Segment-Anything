@@ -29,9 +29,11 @@ from ground_sam.srv import SegmentationRequest
 from ground_sam.srv import SegmentationResponse
 from groundingdino.util.inference import Model
 from LightHQSAM.setup_light_hqsam import setup_model
-from segment_anything import SamPredictor
+from pcl_msgs.msg import PointIndices
 from sensor_msgs.msg import Image
 from std_msgs.msg import String
+
+from segment_anything import SamPredictor
 
 
 class Segmentation(object):
@@ -101,8 +103,23 @@ class Segmentation(object):
         labels = [f'{self.__classes[class_id]} {confidence:0.2f}' for _, _, confidence, class_id, _ in detections]
         annotated_image = mask_annotator.annotate(scene=img.copy(), detections=detections)
         annotated_image = box_annotator.annotate(scene=annotated_image, detections=detections, labels=labels)
+        self.__vis_pub.publish(self.__bridge.cv2_to_imgmsg(annotated_image, encoding='bgr8'))
 
-        return SegmentationResponse(self.__bridge.cv2_to_imgmsg(annotated_image, encoding='bgr8'))
+        resp = SegmentationResponse()
+        resp.labels.header = req.image.header
+        resp.labels.classifier = 'Grounded SAM'
+        resp.labels.label_names = labels
+        resp.labels.labels = detections.class_id.tolist()
+        resp.labels.label_proba = detections.confidence.tolist()
+        resp.labels.target_names = req.classes
+        resp.indices.header = req.image.header
+
+        resp.indices.cluster_indices = [
+            PointIndices(header=req.image.header, indices=np.where(mask.flatten())[0])
+            for _, mask, _, _, _ in detections
+        ]
+
+        return resp
 
     def __classes_callback(self, msg: String) -> None:
         self.__classes = msg.data.split(',')

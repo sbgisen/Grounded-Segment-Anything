@@ -3,7 +3,8 @@ project(ground_sam)
 
 find_package(
   catkin REQUIRED
-  COMPONENTS sensor_msgs
+  COMPONENTS jsk_recognition_msgs
+             sensor_msgs
              cv_bridge
              rospy
              message_generation
@@ -11,12 +12,13 @@ find_package(
 
 add_service_files(FILES Segmentation.srv)
 
-generate_messages(DEPENDENCIES sensor_msgs)
+generate_messages(DEPENDENCIES jsk_recognition_msgs sensor_msgs)
 
 catkin_package(
   #  INCLUDE_DIRS include
   #  LIBRARIES yolact_ros
   CATKIN_DEPENDS
+    jsk_recognition_msgs
     sensor_msgs
     cv_bridge
     rospy

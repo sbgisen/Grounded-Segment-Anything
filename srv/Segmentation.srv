@@ -2,4 +2,5 @@
 string[] classes
 sensor_msgs/Image image
 ---
-sensor_msgs/Image result
+jsk_recognition_msgs/ClassificationResult labels
+jsk_recognition_msgs/ClusterPointIndices indices

@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <launch>
-  <node pkg="ground_sam" type="segmentation.py" name="segmentation" output="screen">
+  <node pkg="ground_sam" type="segmentation.py" name="segmentation" output="screen"/>
+  <node pkg="ground_sam" type="call_example.py" name="call_service" output="screen">
+    <remap from="~segmentation" to="segmentation/segmentation"/>
     <remap from="~image" to="/soar/head_camera/rgb/image_rect"/>
   </node>
 </launch>

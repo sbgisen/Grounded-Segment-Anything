@@ -16,6 +16,8 @@
 # limitations under the License.
 #
 
+import typing
+
 import cv2
 import cv_bridge
 import numpy as np
@@ -32,6 +34,7 @@ from LightHQSAM.setup_light_hqsam import setup_model
 from pcl_msgs.msg import PointIndices
 from sensor_msgs.msg import Image
 from std_msgs.msg import String
+from supervision.detection.core import Detections
 
 from segment_anything import SamPredictor
 
@@ -74,28 +77,44 @@ class Segmentation(object):
 
     def __srv_callback(self, req: SegmentationRequest) -> SegmentationResponse:
         self.__classes = req.classes
+        points = np.array([[p.x, p.y] for p in req.points])
         img = self.__bridge.imgmsg_to_cv2(req.image, desired_encoding='bgr8')
-        detections = self.__grounding_dino_model.predict_with_classes(image=img,
-                                                                      classes=self.__classes,
-                                                                      box_threshold=self.__box_threshold,
-                                                                      text_threshold=self.__text_threshold)
-        box_annotator = sv.BoxAnnotator()
+        detections = None
+        if len(self.__classes) != 0:
+            detections = self.__grounding_dino_model.predict_with_classes(image=img,
+                                                                          classes=self.__classes,
+                                                                          box_threshold=self.__box_threshold,
+                                                                          text_threshold=self.__text_threshold)
+            box_annotator = sv.BoxAnnotator()
 
-        labels = [f'{self.__classes[class_id]} {confidence:0.2f}' for _, _, confidence, class_id, _ in detections]
-        box_annotator.annotate(scene=img.copy(), detections=detections, labels=labels)
-        rospy.loginfo(f'Before NMS: {len(detections.xyxy)} boxes')
+            labels = [f'{self.__classes[class_id]} {confidence:0.2f}' for _, _, confidence, class_id, _ in detections]
+            box_annotator.annotate(scene=img.copy(), detections=detections, labels=labels)
+            rospy.loginfo(f'Before NMS: {len(detections.xyxy)} boxes')
 
-        nms_idx = torchvision.ops.nms(torch.from_numpy(detections.xyxy), torch.from_numpy(detections.confidence),
-                                      self.__nms_threshold).numpy().tolist()
+            nms_idx = torchvision.ops.nms(torch.from_numpy(detections.xyxy), torch.from_numpy(detections.confidence),
+                                          self.__nms_threshold).numpy().tolist()
 
-        detections.xyxy = detections.xyxy[nms_idx]
-        detections.confidence = detections.confidence[nms_idx]
-        detections.class_id = detections.class_id[nms_idx]
+            detections.xyxy = detections.xyxy[nms_idx]
+            detections.confidence = detections.confidence[nms_idx]
+            detections.class_id = detections.class_id[nms_idx]
 
-        rospy.loginfo(f'After NMS: {len(detections.xyxy)} boxes')
+            rospy.loginfo(f'After NMS: {len(detections.xyxy)} boxes')
 
         # convert detections to masks
-        detections.mask = self.__segment(image=cv2.cvtColor(img, cv2.COLOR_BGR2RGB), xyxy=detections.xyxy)
+        xyxy = detections.xyxy if detections is not None else None
+        mask = self.__segment(image=cv2.cvtColor(img, cv2.COLOR_BGR2RGB), xyxy=xyxy, points=points)
+        if detections is not None:
+            detections.mask = mask
+        else:
+            xyxy = []
+            for m in mask:
+                mask_index = np.where(m)
+                xyxy.append([mask_index[1].min(), mask_index[0].min(), mask_index[1].max(), mask_index[0].max()])
+            detections = Detections(np.array(xyxy))
+            detections.mask = mask
+            detections.confidence = np.ones(len(xyxy))
+            detections.class_id = np.ones(len(xyxy), dtype=np.int16)
+            self.__classes = ['unknown']
 
         # annotate image with detections
         box_annotator = sv.BoxAnnotator()
@@ -158,12 +177,25 @@ class Segmentation(object):
         self.__vis_pub.publish(self.__bridge.cv2_to_imgmsg(annotated_image, encoding='bgr8'))
 
     # Prompting SAM with detected boxes
-    def __segment(self, image: np.ndarray, xyxy: np.ndarray) -> np.ndarray:
+    def __segment(self,
+                  image: np.ndarray,
+                  xyxy: typing.Optional[np.ndarray] = None,
+                  points: typing.Optional[np.ndarray] = None) -> np.ndarray:
         self.__sam_predictor.set_image(image)
         result_masks = []
-        for box in xyxy:
+        if xyxy is not None:
+            for box in xyxy:
+                masks, scores, logits = self.__sam_predictor.predict(
+                    box=box,
+                    multimask_output=False,
+                    hq_token_only=True,
+                )
+                index = np.argmax(scores)
+                result_masks.append(masks[index])
+        else:
             masks, scores, logits = self.__sam_predictor.predict(
-                box=box,
+                point_coords=points,
+                point_labels=np.zeros(len(points)),
                 multimask_output=False,
                 hq_token_only=True,
             )

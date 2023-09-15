@@ -17,6 +17,7 @@
 #
 
 import rospy
+from geometry_msgs.msg import Point
 from ground_sam.srv import Segmentation as SegmentationSrv
 from ground_sam.srv import SegmentationRequest
 from jsk_recognition_msgs.msg import ClusterPointIndices
@@ -31,10 +32,19 @@ class CallSegmentation(object):
         self.__segmentation = rospy.ServiceProxy('~segmentation', SegmentationSrv)
         self.__segmentation.wait_for_service()
         rospy.Subscriber('~class', String, self.__class_callback)
+        rospy.Subscriber('~point', Point, self.__point_callback)
 
     def __class_callback(self, msg: String) -> None:
         req = SegmentationRequest()
         req.classes = msg.data.split(',')
+        img = rospy.wait_for_message('~image', Image)
+        req.image = img
+        res = self.__segmentation(req)
+        self.__indices_pub.publish(res.indices)
+
+    def __point_callback(self, msg: Point) -> None:
+        req = SegmentationRequest()
+        req.points = [msg]
         img = rospy.wait_for_message('~image', Image)
         req.image = img
         res = self.__segmentation(req)

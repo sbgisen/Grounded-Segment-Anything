@@ -1,5 +1,6 @@
 
 string[] classes
+geometry_msgs/Point[] points
 sensor_msgs/Image image
 ---
 jsk_recognition_msgs/ClassificationResult labels

@@ -1,8 +1,13 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <launch>
-  <node pkg="ground_sam" type="segmentation.py" name="segmentation" output="screen"/>
+  <!-- <node pkg="ground_sam" type="segmentation.py" name="segmentation" output="screen"/>
   <node pkg="ground_sam" type="call_example.py" name="call_service" output="screen">
     <remap from="~segmentation" to="segmentation/segmentation"/>
     <remap from="~image" to="/soar/head_camera/rgb/image_rect"/>
+  </node> -->
+  <node pkg="ground_sam" type="efficient_sam.py" name="segmentation" output="screen">
+    <remap from="~image" to="/soar/head_camera/rgb/image_rect"/>
+    <remap from="~rects" to="/object_detection/output/rects"/>
+    <remap from="~class" to="/object_detection/output/class"/>
   </node>
 </launch>

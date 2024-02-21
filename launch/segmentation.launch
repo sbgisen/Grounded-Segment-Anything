@@ -5,7 +5,7 @@
     <remap from="~segmentation" to="segmentation/segmentation"/>
     <remap from="~image" to="/soar/head_camera/rgb/image_rect"/>
   </node> -->
-  <node pkg="ground_sam" type="efficient_sam.py" name="segmentation" output="screen">
+  <node pkg="ground_sam" type="light_hq_sam.py" name="segmentation" output="screen">
     <remap from="~image" to="/soar/head_camera/rgb/image_rect"/>
     <remap from="~rects" to="/object_detection/output/rects"/>
     <remap from="~class" to="/object_detection/output/class"/>

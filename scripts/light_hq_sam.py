@@ -27,7 +27,9 @@ import torchvision
 from jsk_recognition_msgs.msg import ClassificationResult
 from jsk_recognition_msgs.msg import RectArray
 from LightHQSAM.setup_light_hqsam import setup_model
+from mask_rcnn_ros.msg import Result
 from sensor_msgs.msg import Image
+from sensor_msgs.msg import RegionOfInterest
 from supervision.detection.core import Detections
 
 from segment_anything import SamPredictor
@@ -57,6 +59,7 @@ class Segmentation(object):
         self.__sync = message_filters.TimeSynchronizer([image_sub, rect_sub, result_sub], 10)
         self.__sync.registerCallback(self.__callback)
         self.__vis_pub = rospy.Publisher('~vis', Image, queue_size=1)
+        self.__results_pub = rospy.Publisher('~results', Result, queue_size=1)
 
     def __callback(self, img_msg: Image, rects_msg: RectArray, results_msg: ClassificationResult) -> None:
         img = self.__bridge.imgmsg_to_cv2(img_msg, desired_encoding='bgr8')
@@ -110,6 +113,23 @@ class Segmentation(object):
         annotated_image = box_annotator.annotate(scene=annotated_image, detections=detections, labels=labels)
 
         self.__vis_pub.publish(self.__bridge.cv2_to_imgmsg(annotated_image, encoding='bgr8'))
+
+        msg_results = Result(header=img_msg.header)
+        bridge = cv_bridge.CvBridge()
+        for rect, mask, class_id, conf, name in zip(rects_msg.rects, detections.mask, detections.class_id,
+                                                    detections.confidence, results_msg.label_names):
+            roi = RegionOfInterest()
+            roi.x_offset = int(np.clip(rect.x, 0, img.shape[1]))
+            roi.y_offset = int(np.clip(rect.y, 0, img.shape[0]))
+            roi.width = int(np.clip(rect.width, 0, img.shape[1]))
+            roi.height = int(np.clip(rect.height, 0, img.shape[0]))
+            msg_results.boxes.append(roi)
+            msg_results.class_ids.append(class_id)
+            msg_results.scores.append(conf)
+            msg_results.class_names.append(name)
+            mask_msg = bridge.cv2_to_imgmsg(mask.astype(np.uint8) * 255, encoding='mono8')
+            msg_results.masks.append(mask_msg)
+        self.__results_pub.publish(msg_results)
 
 
 if __name__ == '__main__':
